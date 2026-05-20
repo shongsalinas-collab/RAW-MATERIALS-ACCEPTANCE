@@ -1,1 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Raw Materials Receiving — QC Dashboard | Big Ben RMC</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+</head>
+<body>
 
+<div class="app">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo-area">
+        <div class="logo-box">BB</div>
+        <div>
+          <div class="header-title">Raw Materials Receiving — QC Dashboard</div>
+          <div class="header-sub">Big Ben Ready Mix Concrete &nbsp;·&nbsp; SD-QA-01 Rev.1 &nbsp;·&nbsp; Target: 100% pass rate, 0% rejection</div>
+        </div>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="badge badge-info" id="cur-date"></span>
+      <select id="sel-month" class="month-select"></select>
+      <button class="btn-primary" onclick="toggleForm()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Log delivery
+      </button>
+    </div>
+  </header>
+
+  <!-- GAUGE KPI ROW -->
+  <section class="section-label">Per material — running pass rate vs 100% target</section>
+  <div class="kpi-grid" id="kpi-grid"></div>
+
+  <!-- OVERALL + TREND -->
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Overall monthly KPI
+      </div>
+      <div class="overall-big">
+        <span class="big-num" id="overall-pct">—</span>
+        <span class="big-target">/ 100% target</span>
+      </div>
+      <div class="run-bar"><div class="run-fill" id="overall-bar"></div></div>
+      <div class="run-note" id="overall-note"></div>
+      <div class="mini-grid" id="overall-mini"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Daily pass rate trend
+      </div>
+      <div class="trend-legend">
+        <span class="leg-item"><span class="leg-sq" style="background:#3B6D11"></span>Pass rate %</span>
+        <span class="leg-item"><span class="leg-sq" style="background:#E24B4A;opacity:.6"></span>Rejections</span>
+        <span class="leg-item"><span class="leg-sq" style="background:#378ADD;border:1px dashed #378ADD"></span>100% target</span>
+      </div>
+      <div class="chart-wrap" style="height:130px"><canvas id="chartTrend" role="img" aria-label="Daily pass rate trend vs 100% target"></canvas></div>
+    </div>
+  </div>
+
+  <!-- DELIVERY LOG -->
+  <div class="card" style="margin-top:12px">
+    <div class="log-head">
+      <div class="card-title" style="margin:0">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Delivery log — <span id="log-month-label"></span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="search-box" placeholder="Search supplier, material, DR…" class="search-input" oninput="renderLog()">
+        <select id="filter-status" class="filter-select" onchange="renderLog()">
+          <option value="">All status</option>
+          <option value="Passed">Passed</option>
+          <option value="Rejected">Rejected</option>
+          <option value="Pending">Pending</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- LOG FORM -->
+    <div class="form-panel" id="form-panel">
+      <div class="form-title">New delivery entry</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Date</label><input type="date" id="f-date"></div>
+        <div class="form-group"><label>Time</label><input type="time" id="f-time"></div>
+        <div class="form-group"><label>DR No.</label><input type="text" id="f-dr" placeholder="DR-001"></div>
+        <div class="form-group"><label>Plate No.</label><input type="text" id="f-plate" placeholder="ABC 123"></div>
+        <div class="form-group"><label>Supplier</label><input type="text" id="f-sup" placeholder="Supplier name"></div>
+        <div class="form-group"><label>Material</label>
+          <select id="f-mat">
+            <option>Coarse Aggregates</option>
+            <option>Fine Aggregates</option>
+            <option>Portland Cement</option>
+            <option>Admixture</option>
+            <option>Fly Ash</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Test parameter</label><input type="text" id="f-param" placeholder="e.g. Sieve Analysis"></div>
+        <div class="form-group"><label>Result / value</label><input type="text" id="f-res" placeholder="e.g. ±3% or 28°C"></div>
+        <div class="form-group"><label>Status</label>
+          <select id="f-stat"><option>Passed</option><option>Rejected</option><option>Pending</option></select>
+        </div>
+        <div class="form-group"><label>Tested by</label><input type="text" id="f-tstr" placeholder="Lab Technician"></div>
+        <div class="form-group" style="grid-column:span 2"><label>Remarks</label><input type="text" id="f-rem" placeholder="Optional remarks"></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-secondary" onclick="toggleForm()">Cancel</button>
+        <button class="btn-primary" onclick="saveDelivery()">Save delivery</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="log-tbl" id="log-tbl">
+        <thead>
+          <tr>
+            <th>Date</th><th>Time</th><th>DR No.</th><th>Plate</th>
+            <th>Supplier</th><th>Material</th><th>Test parameter</th>
+            <th>Result</th><th>Status</th><th>Tested by</th><th>Remarks</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="log-body"></tbody>
+      </table>
+    </div>
+    <div class="log-footer" id="log-footer"></div>
+  </div>
+
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="edit-overlay" onclick="if(event.target===this)closeEdit()">
+  <div class="modal">
+    <div class="modal-title">Edit delivery entry</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Date</label><input type="date" id="e-date"></div>
+      <div class="form-group"><label>Time</label><input type="time" id="e-time"></div>
+      <div class="form-group"><label>DR No.</label><input type="text" id="e-dr"></div>
+      <div class="form-group"><label>Plate No.</label><input type="text" id="e-plate"></div>
+      <div class="form-group"><label>Supplier</label><input type="text" id="e-sup"></div>
+      <div class="form-group"><label>Material</label>
+        <select id="e-mat">
+          <option>Coarse Aggregates</option><option>Fine Aggregates</option>
+          <option>Portland Cement</option><option>Admixture</option><option>Fly Ash</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Test parameter</label><input type="text" id="e-param"></div>
+      <div class="form-group"><label>Result / value</label><input type="text" id="e-res"></div>
+      <div class="form-group"><label>Status</label>
+        <select id="e-stat"><option>Passed</option><option>Rejected</option><option>Pending</option></select>
+      </div>
+      <div class="form-group"><label>Tested by</label><input type="text" id="e-tstr"></div>
+      <div class="form-group" style="grid-column:span 2"><label>Remarks</label><input type="text" id="e-rem"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-danger" onclick="deleteEntry()">Delete</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn-secondary" onclick="closeEdit()">Cancel</button>
+        <button class="btn-primary" onclick="saveEdit()">Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
