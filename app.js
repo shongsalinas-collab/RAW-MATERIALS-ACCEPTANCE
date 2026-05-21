@@ -4,11 +4,6 @@
    Firebase Firestore version — shared real-time data
    ============================================================ */
 
-/* ============================================================
-   FIREBASE CONFIG — PALITAN ANG MGA VALUE DITO
-   Makukuha sa: Firebase Console → Project Settings → General
-   → Your apps → Web app → firebaseConfig
-   ============================================================ */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
@@ -46,7 +41,6 @@ const MAT_CRITERIA = {
 const MAT_COLORS = ['#378ADD', '#1D9E75', '#D85A30', '#7F77DD', '#BA7517'];
 
 let allData = [];
-let editIndex = null;
 let editDocId = null;
 let gaugeCharts = {};
 let trendChart = null;
@@ -54,7 +48,6 @@ let trendChart = null;
 /* ============================================================ DATA — FIRESTORE ============================================================ */
 
 function loadData() {
-  // Real-time listener — awtomatiko mag-a-update ang dashboard kapag may nag-edit
   const col = collection(db, COLLECTION);
   onSnapshot(col, (snapshot) => {
     allData = [];
@@ -96,7 +89,7 @@ async function deleteData(docId) {
   }
 }
 
-async function clearAllData() {
+window.clearAllData = async function() {
   if (!confirm('Clear ALL delivery data? This cannot be undone.')) return;
   try {
     const snapshot = await getDocs(collection(db, COLLECTION));
@@ -106,7 +99,7 @@ async function clearAllData() {
   } catch (e) {
     showToast('Error clearing data: ' + e.message, '#E24B4A');
   }
-}
+};
 
 /* ============================================================ MONTH SELECT ============================================================ */
 
@@ -156,7 +149,6 @@ function render() {
   renderLog();
 }
 
-/* ---- GAUGE CARDS ---- */
 function renderGauges(md) {
   const grid = document.getElementById('kpi-grid');
   grid.innerHTML = '';
@@ -213,7 +205,6 @@ function renderGauges(md) {
   });
 }
 
-/* ---- OVERALL KPI ---- */
 function renderOverall(md) {
   const tot  = md.length;
   const pass = md.filter(d => d.status === 'Passed').length;
@@ -249,7 +240,6 @@ function renderOverall(md) {
     </div>`).join('');
 }
 
-/* ---- TREND CHART ---- */
 function renderTrend(md, monthStr) {
   if (trendChart) { trendChart.destroy(); trendChart = null; }
   const [y, mo] = monthStr.split('-');
@@ -328,7 +318,6 @@ function renderTrend(md, monthStr) {
   });
 }
 
-/* ---- DELIVERY LOG ---- */
 function renderLog() {
   const md = monthData();
   const search = (document.getElementById('search-box')?.value || '').toLowerCase();
@@ -367,7 +356,7 @@ function renderLog() {
         <td title="${d.tester}">${d.tester || '—'}</td>
         <td title="${d.remarks || ''}">${d.remarks || '—'}</td>
         <td>
-          <button class="edit-btn" onclick="openEdit('${d._id}')" title="Edit entry">
+          <button class="edit-btn" onclick="window.openEdit('${d._id}')" title="Edit entry">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -384,7 +373,7 @@ function renderLog() {
 
 /* ============================================================ FORM — ADD ============================================================ */
 
-function toggleForm() {
+window.toggleForm = function() {
   const panel = document.getElementById('form-panel');
   const isOpen = panel.classList.contains('open');
   if (!isOpen) {
@@ -399,9 +388,9 @@ function toggleForm() {
     panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
   panel.classList.toggle('open', !isOpen);
-}
+};
 
-async function saveDelivery() {
+window.saveDelivery = async function() {
   const entry = {
     date:     document.getElementById('f-date').value || new Date().toISOString().split('T')[0],
     time:     document.getElementById('f-time').value,
@@ -425,11 +414,11 @@ async function saveDelivery() {
   document.getElementById('sel-month').value = entry.date.slice(0, 7);
   document.getElementById('form-panel').classList.remove('open');
   showToast(`Delivery logged — ${entry.material} · ${entry.status}`, entry.status === 'Passed' ? '#639922' : '#E24B4A');
-}
+};
 
 /* ============================================================ FORM — EDIT ============================================================ */
 
-function openEdit(docId) {
+window.openEdit = function(docId) {
   const d = allData.find(x => x._id === docId);
   if (!d) return;
   editDocId = docId;
@@ -447,14 +436,14 @@ function openEdit(docId) {
   document.getElementById('e-rem').value   = d.remarks;
 
   document.getElementById('edit-overlay').classList.add('open');
-}
+};
 
-function closeEdit() {
+window.closeEdit = function() {
   document.getElementById('edit-overlay').classList.remove('open');
   editDocId = null;
-}
+};
 
-async function saveEdit() {
+window.saveEdit = async function() {
   if (!editDocId) return;
   const entry = {
     date:     document.getElementById('e-date').value,
@@ -470,17 +459,17 @@ async function saveEdit() {
     remarks:  document.getElementById('e-rem').value.trim(),
   };
   await updateData(editDocId, entry);
-  closeEdit();
+  window.closeEdit();
   showToast('Entry updated successfully.', '#639922');
-}
+};
 
-async function deleteEntry() {
+window.deleteEntry = async function() {
   if (!editDocId) return;
   if (!confirm('Delete this delivery entry? This cannot be undone.')) return;
   await deleteData(editDocId);
-  closeEdit();
+  window.closeEdit();
   showToast('Entry deleted.', '#E24B4A');
-}
+};
 
 /* ============================================================ TOAST ============================================================ */
 
@@ -501,7 +490,7 @@ function showToast(msg, color = '#639922') {
 
 /* ============================================================ EXPORT ============================================================ */
 
-function exportCSV() {
+window.exportCSV = function() {
   const md = monthData();
   const headers = ['Date','Time','DR No.','Plate No.','Supplier','Material','Test Parameter','Result','Status','Tested By','Remarks'];
   const rows = md.map(d => [
@@ -519,13 +508,13 @@ function exportCSV() {
   a.click();
   URL.revokeObjectURL(url);
   showToast('CSV exported successfully.', '#378ADD');
-}
+};
 
 /* ============================================================ KEYBOARD ============================================================ */
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    closeEdit();
+    window.closeEdit();
     document.getElementById('form-panel').classList.remove('open');
   }
 });
@@ -533,7 +522,7 @@ document.addEventListener('keydown', e => {
 /* ============================================================ INIT ============================================================ */
 
 document.addEventListener('DOMContentLoaded', () => {
-  loadData(); // Real-time listener na — awtomatiko mag-re-render
+  loadData();
 
   document.getElementById('sel-month').addEventListener('change', render);
 
@@ -543,13 +532,13 @@ document.addEventListener('DOMContentLoaded', () => {
   exportBtn.className = 'btn-secondary';
   exportBtn.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px';
   exportBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export CSV';
-  exportBtn.onclick = exportCSV;
+  exportBtn.onclick = window.exportCSV;
 
   const clearBtn = document.createElement('button');
   clearBtn.className = 'btn-danger';
   clearBtn.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px';
   clearBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg> Clear data';
-  clearBtn.onclick = clearAllData;
+  clearBtn.onclick = window.clearAllData;
 
   headerRight.insertBefore(clearBtn, headerRight.querySelector('.btn-primary'));
   headerRight.insertBefore(exportBtn, clearBtn);
