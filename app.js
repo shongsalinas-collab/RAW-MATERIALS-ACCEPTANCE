@@ -1,9 +1,29 @@
 /* ============================================================
    Big Ben RMC — Raw Materials Receiving KPI Dashboard
    app.js  |  SD-QA-01 Rev.1
+   Firebase Firestore version — shared real-time data
    ============================================================ */
 
-const STORAGE_KEY = 'bigben_rmc_kpi_v1';
+/* ============================================================
+   FIREBASE CONFIG — PALITAN ANG MGA VALUE DITO
+   Makukuha sa: Firebase Console → Project Settings → General
+   → Your apps → Web app → firebaseConfig
+   ============================================================ */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey:            "AIzaSyB9w-dx2Jwfq0S9tBec7e8aT6r1i3gYBKw",
+  authDomain:        "raw-materials-acceptance.firebaseapp.com",
+  projectId:         "raw-materials-acceptance",
+  storageBucket:     "raw-materials-acceptance.firebasestorage.app",
+  messagingSenderId: "344106615126",
+  appId:             "1:344106615126:web:f5243e6e775a11d8af56f7"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+const COLLECTION = "deliveries";
 
 const MATERIALS = [
   'Coarse Aggregates',
@@ -27,65 +47,65 @@ const MAT_COLORS = ['#378ADD', '#1D9E75', '#D85A30', '#7F77DD', '#BA7517'];
 
 let allData = [];
 let editIndex = null;
+let editDocId = null;
 let gaugeCharts = {};
 let trendChart = null;
 
-/* ============================================================ DATA ============================================================ */
+/* ============================================================ DATA — FIRESTORE ============================================================ */
 
 function loadData() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) allData = JSON.parse(raw);
-  } catch (e) {
+  // Real-time listener — awtomatiko mag-a-update ang dashboard kapag may nag-edit
+  const col = collection(db, COLLECTION);
+  onSnapshot(col, (snapshot) => {
     allData = [];
-  }
-  // No auto-sample — starts blank for real use
+    snapshot.forEach(docSnap => {
+      allData.push({ _id: docSnap.id, ...docSnap.data() });
+    });
+    allData.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+    buildMonthSelect();
+    render();
+  }, (error) => {
+    showToast('Connection error. Check Firebase config.', '#E24B4A');
+    console.error(error);
+  });
 }
 
-function clearAllData() {
-  if (!confirm('Clear ALL delivery data? This cannot be undone.')) return;
-  localStorage.removeItem(STORAGE_KEY);
-  allData = [];
-  buildMonthSelect();
-  render();
-  showToast('All data cleared. Ready for real entries.', '#378ADD');
-}
-
-function saveData() {
+async function saveData(entry) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(allData));
+    await addDoc(collection(db, COLLECTION), entry);
   } catch (e) {
-    showToast('Storage full — data not saved.', '#E24B4A');
+    showToast('Error saving data: ' + e.message, '#E24B4A');
   }
 }
 
-function sampleData() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = (n) => `${y}-${m}-${String(n).padStart(2, '0')}`;
-  return [
-    { date: d(2),  time: '07:30', dr: 'DR-2501', plate: 'XYZ 001', supplier: 'ABC Aggregates',  material: 'Coarse Aggregates', param: 'Sieve Analysis',    result: '±3%',          status: 'Passed',   tester: 'J. Dela Cruz', remarks: '' },
-    { date: d(2),  time: '09:15', dr: 'DR-2502', plate: 'DEF 002', supplier: 'San Jose Sand',    material: 'Fine Aggregates',   param: 'Sieve Analysis',    result: '±6%',          status: 'Rejected', tester: 'J. Dela Cruz', remarks: 'Failed ±5% limit' },
-    { date: d(3),  time: '08:00', dr: 'DR-2503', plate: 'GHI 003', supplier: 'PHL Cement Corp',  material: 'Portland Cement',   param: 'Temperature',       result: '28°C',         status: 'Passed',   tester: 'M. Santos',    remarks: '' },
-    { date: d(3),  time: '10:30', dr: 'DR-2504', plate: 'JKL 004', supplier: 'Chem Solutions',   material: 'Admixture',         param: 'Specific Gravity',  result: '1.21',         status: 'Passed',   tester: 'M. Santos',    remarks: 'Within spec 1.18–1.25' },
-    { date: d(4),  time: '07:45', dr: 'DR-2505', plate: 'MNO 005', supplier: 'FlyAsh Supply Co', material: 'Fly Ash',           param: 'Visual Inspection', result: 'Oil floating',  status: 'Rejected', tester: 'R. Reyes',     remarks: 'Rejected — float oil present' },
-    { date: d(5),  time: '11:00', dr: 'DR-2506', plate: 'PQR 006', supplier: 'ABC Aggregates',   material: 'Coarse Aggregates', param: 'Sieve Analysis',    result: '±2%',          status: 'Passed',   tester: 'J. Dela Cruz', remarks: '' },
-    { date: d(6),  time: '08:20', dr: 'DR-2507', plate: 'STU 007', supplier: 'San Jose Sand',    material: 'Fine Aggregates',   param: 'Sieve Analysis',    result: '±4%',          status: 'Passed',   tester: 'J. Dela Cruz', remarks: '' },
-    { date: d(7),  time: '09:45', dr: 'DR-2508', plate: 'VWX 008', supplier: 'PHL Cement Corp',  material: 'Portland Cement',   param: 'Temperature',       result: '34°C',         status: 'Rejected', tester: 'R. Reyes',     remarks: 'Exceeded 32°C limit' },
-    { date: d(8),  time: '07:00', dr: 'DR-2509', plate: 'YZA 009', supplier: 'FlyAsh Supply Co', material: 'Fly Ash',           param: 'Visual Inspection', result: 'Clean, gray',  status: 'Passed',   tester: 'M. Santos',    remarks: 'With mill cert' },
-    { date: d(8),  time: '10:00', dr: 'DR-2510', plate: 'BCD 010', supplier: 'Chem Solutions',   material: 'Admixture',         param: 'Specific Gravity',  result: '1.28',         status: 'Rejected', tester: 'M. Santos',    remarks: 'Above spec — rejected' },
-    { date: d(9),  time: '08:30', dr: 'DR-2511', plate: 'EFG 011', supplier: 'ABC Aggregates',   material: 'Coarse Aggregates', param: 'Sieve Analysis',    result: '±1%',          status: 'Passed',   tester: 'J. Dela Cruz', remarks: '' },
-    { date: d(10), time: '09:00', dr: 'DR-2512', plate: 'HIJ 012', supplier: 'San Jose Sand',    material: 'Fine Aggregates',   param: 'Sieve Analysis',    result: '±3%',          status: 'Passed',   tester: 'J. Dela Cruz', remarks: '' },
-    { date: d(11), time: '08:00', dr: 'DR-2513', plate: 'KLM 013', supplier: 'PHL Cement Corp',  material: 'Portland Cement',   param: 'Temperature',       result: '30°C',         status: 'Passed',   tester: 'R. Reyes',     remarks: '' },
-    { date: d(12), time: '11:15', dr: 'DR-2514', plate: 'NOP 014', supplier: 'FlyAsh Supply Co', material: 'Fly Ash',           param: 'Visual Inspection', result: 'Unburn coal',  status: 'Rejected', tester: 'M. Santos',    remarks: 'Quality issue' },
-    { date: d(13), time: '08:00', dr: 'DR-2515', plate: 'OPQ 015', supplier: 'ABC Aggregates',   material: 'Coarse Aggregates', param: 'Sieve Analysis',    result: '±2%',          status: 'Passed',   tester: 'J. Dela Cruz', remarks: '' },
-    { date: d(14), time: '09:30', dr: 'DR-2516', plate: 'RST 016', supplier: 'San Jose Sand',    material: 'Fine Aggregates',   param: 'Sieve Analysis',    result: '±1%',          status: 'Passed',   tester: 'J. Dela Cruz', remarks: '' },
-    { date: d(15), time: '07:45', dr: 'DR-2517', plate: 'UVW 017', supplier: 'PHL Cement Corp',  material: 'Portland Cement',   param: 'Temperature',       result: '29°C',         status: 'Passed',   tester: 'M. Santos',    remarks: '' },
-    { date: d(15), time: '10:00', dr: 'DR-2518', plate: 'XYZ 018', supplier: 'Chem Solutions',   material: 'Admixture',         param: 'Specific Gravity',  result: '1.20',         status: 'Passed',   tester: 'M. Santos',    remarks: '' },
-    { date: d(16), time: '08:15', dr: 'DR-2519', plate: 'ABC 019', supplier: 'FlyAsh Supply Co', material: 'Fly Ash',           param: 'Visual Inspection', result: 'Gray, clean',  status: 'Passed',   tester: 'R. Reyes',     remarks: 'With cert' },
-    { date: d(17), time: '09:00', dr: 'DR-2520', plate: 'DEF 020', supplier: 'ABC Aggregates',   material: 'Coarse Aggregates', param: 'Sieve Analysis',    result: '±4%',          status: 'Passed',   tester: 'J. Dela Cruz', remarks: '' },
-  ].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+async function updateData(docId, entry) {
+  try {
+    const ref = doc(db, COLLECTION, docId);
+    await updateDoc(ref, entry);
+  } catch (e) {
+    showToast('Error updating data: ' + e.message, '#E24B4A');
+  }
+}
+
+async function deleteData(docId) {
+  try {
+    const ref = doc(db, COLLECTION, docId);
+    await deleteDoc(ref);
+  } catch (e) {
+    showToast('Error deleting data: ' + e.message, '#E24B4A');
+  }
+}
+
+async function clearAllData() {
+  if (!confirm('Clear ALL delivery data? This cannot be undone.')) return;
+  try {
+    const snapshot = await getDocs(collection(db, COLLECTION));
+    const deletes = snapshot.docs.map(d => deleteDoc(doc(db, COLLECTION, d.id)));
+    await Promise.all(deletes);
+    showToast('All data cleared. Ready for real entries.', '#378ADD');
+  } catch (e) {
+    showToast('Error clearing data: ' + e.message, '#E24B4A');
+  }
 }
 
 /* ============================================================ MONTH SELECT ============================================================ */
@@ -332,8 +352,7 @@ function renderLog() {
   if (!rows.length) {
     tbody.innerHTML = '<tr class="empty-row"><td colspan="12">No deliveries match the current filter for this month.</td></tr>';
   } else {
-    tbody.innerHTML = rows.map((d, i) => {
-      const realIndex = allData.indexOf(d);
+    tbody.innerHTML = rows.map((d) => {
       const pillCls = d.status === 'Passed' ? 'pill-pass' : d.status === 'Rejected' ? 'pill-reject' : 'pill-pending';
       return `<tr>
         <td>${d.date}</td>
@@ -348,7 +367,7 @@ function renderLog() {
         <td title="${d.tester}">${d.tester || '—'}</td>
         <td title="${d.remarks || ''}">${d.remarks || '—'}</td>
         <td>
-          <button class="edit-btn" onclick="openEdit(${realIndex})" title="Edit entry">
+          <button class="edit-btn" onclick="openEdit('${d._id}')" title="Edit entry">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -382,7 +401,7 @@ function toggleForm() {
   panel.classList.toggle('open', !isOpen);
 }
 
-function saveDelivery() {
+async function saveDelivery() {
   const entry = {
     date:     document.getElementById('f-date').value || new Date().toISOString().split('T')[0],
     time:     document.getElementById('f-time').value,
@@ -402,25 +421,18 @@ function saveDelivery() {
     return;
   }
 
-  allData.push(entry);
-  allData.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
-  saveData();
-  buildMonthSelect();
-
-  // Switch to the month of the new entry
+  await saveData(entry);
   document.getElementById('sel-month').value = entry.date.slice(0, 7);
-
   document.getElementById('form-panel').classList.remove('open');
-  render();
   showToast(`Delivery logged — ${entry.material} · ${entry.status}`, entry.status === 'Passed' ? '#639922' : '#E24B4A');
 }
 
 /* ============================================================ FORM — EDIT ============================================================ */
 
-function openEdit(index) {
-  editIndex = index;
-  const d = allData[index];
+function openEdit(docId) {
+  const d = allData.find(x => x._id === docId);
   if (!d) return;
+  editDocId = docId;
 
   document.getElementById('e-date').value  = d.date;
   document.getElementById('e-time').value  = d.time;
@@ -439,12 +451,12 @@ function openEdit(index) {
 
 function closeEdit() {
   document.getElementById('edit-overlay').classList.remove('open');
-  editIndex = null;
+  editDocId = null;
 }
 
-function saveEdit() {
-  if (editIndex === null) return;
-  allData[editIndex] = {
+async function saveEdit() {
+  if (!editDocId) return;
+  const entry = {
     date:     document.getElementById('e-date').value,
     time:     document.getElementById('e-time').value,
     dr:       document.getElementById('e-dr').value.trim(),
@@ -457,21 +469,16 @@ function saveEdit() {
     tester:   document.getElementById('e-tstr').value.trim(),
     remarks:  document.getElementById('e-rem').value.trim(),
   };
-  allData.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
-  saveData();
+  await updateData(editDocId, entry);
   closeEdit();
-  render();
   showToast('Entry updated successfully.', '#639922');
 }
 
-function deleteEntry() {
-  if (editIndex === null) return;
+async function deleteEntry() {
+  if (!editDocId) return;
   if (!confirm('Delete this delivery entry? This cannot be undone.')) return;
-  allData.splice(editIndex, 1);
-  saveData();
+  await deleteData(editDocId);
   closeEdit();
-  buildMonthSelect();
-  render();
   showToast('Entry deleted.', '#E24B4A');
 }
 
@@ -526,12 +533,10 @@ document.addEventListener('keydown', e => {
 /* ============================================================ INIT ============================================================ */
 
 document.addEventListener('DOMContentLoaded', () => {
-  loadData();
-  buildMonthSelect();
-  render();
+  loadData(); // Real-time listener na — awtomatiko mag-re-render
+
   document.getElementById('sel-month').addEventListener('change', render);
 
-  // Add export + clear buttons to header
   const headerRight = document.querySelector('.header-right');
 
   const exportBtn = document.createElement('button');
